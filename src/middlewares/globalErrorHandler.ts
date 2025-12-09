@@ -1,99 +1,51 @@
-// import { Prisma } from "@prisma/client";
-// import { NextFunction, Request, Response } from "express";
-// import httpStatus from "http-status";
-// // import { deleteImageFromCLoudinary } from "../config/cloudinary.config";
+import { NextFunction, Request, Response } from "express";
+import httpStatus from "http-status";
+import AppError from "../errorHelpers/AppError";
 
-// const globalErrorHandler = async (
-//   err: any,
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-// //   if (req.file) {
-// //     await deleteImageFromCLoudinary(req.file.path);
-// //   }
-//   let statusCode: number = err.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
-//   let success = false;
-//   let message = err.message || "Something went wrong!";
-//   let error = err;
+const globalErrorHandler = (
+  err: any,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  let statusCode: number = httpStatus.INTERNAL_SERVER_ERROR;
+  let success = false;
+  let message = "Something went wrong!";
+  let error = err;
 
-//   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-//     if (err.code === "P2002") {
-//       statusCode = httpStatus.BAD_REQUEST;
-//       message = `Unique constraint failed on the field: ${err.meta?.target}`;
-//       error = {
-//         code: err.code,
-//         meta: err.meta,
-//       };
-//     }
-//     if (err.code === "P2025") {
-//       statusCode = httpStatus.NOT_FOUND;
-//       message = `Record not found: ${err.meta?.cause || ""}`;
-//       error = {
-//         code: err.code,
-//         meta: err.meta,
-//       };
-//     }
-//     if (err.code === "P2003") {
-//       statusCode = httpStatus.BAD_REQUEST;
-//       message = `Foreign key constraint failed on the field: ${err.meta?.field_name}`;
-//       error = {
-//         code: err.code,
-//         meta: err.meta,
-//       };
-//     }
-//     if (err.code === "P2004") {
-//       statusCode = httpStatus.BAD_REQUEST;
-//       message = `A constraint failed: ${err.meta?.constraint_name}`;
-//       error = {
-//         code: err.code,
-//         meta: err.meta,
-//       };
-//     }
-//     if (err.code === "P2001") {
-//       statusCode = httpStatus.NOT_FOUND;
-//       message = `The record searched for in the where condition does not exist: ${err.meta?.model_name}`;
-//       error = {
-//         code: err.code,
-//         meta: err.meta,
-//       };
-//     }
-//     if (err.code === "P1000") {
-//       statusCode = httpStatus.INTERNAL_SERVER_ERROR;
-//       message = `Authentication failed against database: ${err.meta?.database_name}`;
-//       error = {
-//         code: err.code,
-//         meta: err.meta,
-//       };
-//     }
-//   } else if (err instanceof Prisma.PrismaClientValidationError) {
-//     statusCode = httpStatus.BAD_REQUEST;
-//     message = "Prisma Client Validation Error";
-//     error = {
-//       message: err.message,
-//       // stack: err.stack,
-//     };
-//   } else if (err instanceof Prisma.PrismaClientUnknownRequestError) {
-//     statusCode = httpStatus.INTERNAL_SERVER_ERROR;
-//     message = "An unknown error occurred in Prisma Client";
-//     error = {
-//       message: err.message,
-//       // stack: err.stack,
-//     };
-//   } else if (err instanceof Prisma.PrismaClientInitializationError) {
-//     statusCode = httpStatus.INTERNAL_SERVER_ERROR;
-//     message = "Prisma Client Initialization Error";
-//     error = {
-//       message: err.message,
-//       // stack: err.stack,
-//     };
-//   }
+  // Handle AppError
+  if (err instanceof AppError) {
+    statusCode = err.statusCode;
+    message = err.message;
+    error = err;
+  }
+  // Handle Prisma Unique Constraint Error
+  else if (err.code === "P2002") {
+    statusCode = httpStatus.CONFLICT;
+    message = `${err.meta?.target?.[0] || "Field"} already exists`;
+    error = err;
+  }
+  // Handle Prisma Record Not Found
+  else if (err.code === "P2025") {
+    statusCode = httpStatus.NOT_FOUND;
+    message = "Record not found";
+    error = err;
+  }
+  // Handle JSON Parse Error
+  else if (err instanceof SyntaxError) {
+    statusCode = httpStatus.BAD_REQUEST;
+    message = "Invalid JSON";
+    error = err;
+  }
 
-//   res.status(statusCode).json({
-//     success,
-//     message,
-//     error,
-//   });
-// };
+  res.status(statusCode).json({
+    success,
+    message,
+    error:
+      process.env.NODE_ENV === "production"
+        ? { message }
+        : { message: error.message, stack: error.stack },
+  });
+};
 
-// export default globalErrorHandler;
+export default globalErrorHandler;
